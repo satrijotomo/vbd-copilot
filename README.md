@@ -6,8 +6,6 @@
 
 > [Pitch deck: VBD-Copilot.pptx](presentations/VBD-Copilot.pptx)
 
-<video src="presentations/vbd-copilot.mp4" controls autoplay muted>Your browser does not support the video tag.</video>
-
 ---
 
 ## Quick Index
