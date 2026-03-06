@@ -116,7 +116,8 @@ PT_STYLE = PTStyle.from_dict({
 })
 
 # ── History file ──────────────────────────────────────────────────────────────
-HISTORY_DIR = Path.home() / ".copilot"
+# Use a writable local directory for history (the ~/.copilot mount may be read-only)
+HISTORY_DIR = Path.home() / ".vbd-copilot"
 HISTORY_FILE = HISTORY_DIR / "vbd-copilot-history"
 
 
@@ -137,6 +138,7 @@ class CopilotUI:
         self.debug_mode: bool = True
         self._tracker: AgentRunTracker | None = None
         self._needs_newline: bool = False  # True when stdout has pending text without trailing \n
+        self._in_reasoning: bool = False  # True while streaming reasoning deltas
         self._last_width: int = shutil.get_terminal_size().columns
 
         HISTORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -455,6 +457,9 @@ class CopilotUI:
 
         if etype == SessionEventType.ASSISTANT_MESSAGE_DELTA:
             self._received_deltas = True
+            if self._in_reasoning:
+                self._flush_newline()
+                self._in_reasoning = False
             delta = getattr(d, "delta_content", None) or ""
             if delta:
                 sys.stdout.write(delta)
@@ -464,6 +469,7 @@ class CopilotUI:
 
         if etype == SessionEventType.ASSISTANT_REASONING_DELTA:
             if self.debug_mode:
+                self._in_reasoning = True
                 delta = getattr(d, "delta_content", None) or ""
                 if delta:
                     sys.stdout.write(f"\033[2m\033[3m{delta}\033[0m")
@@ -957,7 +963,7 @@ class CopilotUI:
                         "  >> [bold]Tab[/bold] auto-completes commands and agent names\n"
                         "  >> Use [cyan]@slide-conductor[/cyan] or "
                         "[cyan]@demo-conductor[/cyan] to route directly\n"
-                        "  >> History persists across sessions (~/.copilot/)\n"
+                        "  >> History persists across sessions (~/.vbd-copilot/)\n"
                         "  >> Set BING_API_KEY env var for reliable web search\n"
                         "  >> Run inside the Dev Container for full functionality\n"
                     ),
