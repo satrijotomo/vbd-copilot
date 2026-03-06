@@ -699,7 +699,6 @@ class CopilotUI:
         # Reset any lingering ANSI attributes (dim/italic from reasoning deltas)
         sys.stdout.write("\033[0m")
         sys.stdout.flush()
-        print()
         self.console.print()
 
     def print_session_created(self, session_id: str) -> None:
