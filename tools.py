@@ -1,5 +1,5 @@
 """
-Custom tools for VBD-Copilot.
+Custom tools for CSA-Copilot.
 
 Most capabilities are provided by the Copilot CLI's built-in tools:
   - web_fetch         -> fetch any URL from the internet
@@ -257,7 +257,245 @@ DEMO_TOOLS = [run_demo_qa_checks]
 
 
 # =============================================================================
+# Architecture QA - Programmatic Checks
+# =============================================================================
+
+
+class RunArchitectureQaChecksParams(BaseModel):
+    docs_dir: str = Field(description="Path to the docs directory to validate")
+    project_slug: str = Field(
+        default="",
+        description="Project slug for context (optional)",
+    )
+
+
+@define_tool(
+    description=(
+        "Run automated QA checks on generated architecture documentation. "
+        "Checks for: expected files exist (solution-design.md, .drawio, "
+        "architecture-diagram.md, cost-estimation.md, delivery-plan.md), "
+        "drawio XML validity, markdown section completeness, placeholder text, "
+        "competitor cloud references, and ASCII diagram presence. "
+        "Returns a structured report with CRITICAL/MAJOR/MINOR issues. "
+        "Exit code 0 = CLEAN, 1 = ISSUES_FOUND."
+    )
+)
+def run_architecture_qa_checks(params: RunArchitectureQaChecksParams) -> str:
+    import subprocess
+    qa_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "skills", "architecture-design", "architecture_qa_checks.py")
+
+    if not os.path.exists(qa_script):
+        return f"ERROR: QA script not found at {qa_script}"
+
+    cmd = [sys.executable, qa_script, params.docs_dir]
+    if params.project_slug:
+        cmd.extend(["--project-slug", params.project_slug])
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout
+        if result.returncode == 2:
+            output = f"ERROR running architecture QA checks:\n{result.stderr}\n"
+        return output
+    except Exception as e:
+        return f"ERROR running architecture QA checks: {e}"
+
+
+ARCHITECTURE_TOOLS = [run_architecture_qa_checks]
+
+
+# =============================================================================
+# Infrastructure QA - Programmatic Checks
+# =============================================================================
+
+
+class RunInfraQaChecksParams(BaseModel):
+    infra_dir: str = Field(description="Path to the infra directory to validate")
+    project_slug: str = Field(
+        default="",
+        description="Project slug for context (optional)",
+    )
+
+
+@define_tool(
+    description=(
+        "Run automated QA checks on infrastructure-as-code (Bicep/ARM). "
+        "Checks for: Bicep syntax (via az bicep build), parameter completeness, "
+        "module structure, security patterns (Key Vault, managed identity, RBAC), "
+        "hardcoded secrets, naming conventions, tags, and Azure mandate compliance. "
+        "Returns a structured report with CRITICAL/MAJOR/MINOR issues. "
+        "Exit code 0 = CLEAN, 1 = ISSUES_FOUND."
+    )
+)
+def run_infra_qa_checks(params: RunInfraQaChecksParams) -> str:
+    import subprocess
+    qa_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "skills", "code-project", "infra_qa_checks.py")
+
+    if not os.path.exists(qa_script):
+        return f"ERROR: QA script not found at {qa_script}"
+
+    cmd = [sys.executable, qa_script, params.infra_dir]
+    if params.project_slug:
+        cmd.extend(["--project-slug", params.project_slug])
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout
+        if result.returncode == 2:
+            output = f"ERROR running infra QA checks:\n{result.stderr}\n"
+        return output
+    except Exception as e:
+        return f"ERROR running infra QA checks: {e}"
+
+
+# =============================================================================
+# Pipeline QA - Programmatic Checks
+# =============================================================================
+
+
+class RunPipelineQaChecksParams(BaseModel):
+    project_dir: str = Field(description="Path to the project directory to validate")
+    project_slug: str = Field(
+        default="",
+        description="Project slug for context (optional)",
+    )
+
+
+@define_tool(
+    description=(
+        "Run automated QA checks on CI/CD pipelines and deployment automation. "
+        "Checks for: workflow YAML validity, secret handling, deploy.sh structure "
+        "(set -euo pipefail, flags, functions), validate.sh structure, "
+        "and script correctness. Returns a structured report with "
+        "CRITICAL/MAJOR/MINOR issues. Exit code 0 = CLEAN, 1 = ISSUES_FOUND."
+    )
+)
+def run_pipeline_qa_checks(params: RunPipelineQaChecksParams) -> str:
+    import subprocess
+    qa_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "skills", "code-project", "pipeline_qa_checks.py")
+
+    if not os.path.exists(qa_script):
+        return f"ERROR: QA script not found at {qa_script}"
+
+    cmd = [sys.executable, qa_script, params.project_dir]
+    if params.project_slug:
+        cmd.extend(["--project-slug", params.project_slug])
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout
+        if result.returncode == 2:
+            output = f"ERROR running pipeline QA checks:\n{result.stderr}\n"
+        return output
+    except Exception as e:
+        return f"ERROR running pipeline QA checks: {e}"
+
+
+# =============================================================================
+# Documentation QA - Programmatic Checks
+# =============================================================================
+
+
+class RunDocsQaChecksParams(BaseModel):
+    project_dir: str = Field(description="Path to the project directory to validate")
+    project_slug: str = Field(
+        default="",
+        description="Project slug for context (optional)",
+    )
+
+
+@define_tool(
+    description=(
+        "Run automated QA checks on project documentation (README.md). "
+        "Checks for: required sections present (overview, prerequisites, deploy, "
+        "validation, demo guide, troubleshooting), path accuracy, command correctness, "
+        "environment variable documentation, deploy.sh/validate.sh usage docs, "
+        "placeholders, and content quality. Returns a structured report with "
+        "CRITICAL/MAJOR/MINOR issues. Exit code 0 = CLEAN, 1 = ISSUES_FOUND."
+    )
+)
+def run_docs_qa_checks(params: RunDocsQaChecksParams) -> str:
+    import subprocess
+    qa_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "skills", "code-project", "docs_qa_checks.py")
+
+    if not os.path.exists(qa_script):
+        return f"ERROR: QA script not found at {qa_script}"
+
+    cmd = [sys.executable, qa_script, params.project_dir]
+    if params.project_slug:
+        cmd.extend(["--project-slug", params.project_slug])
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout
+        if result.returncode == 2:
+            output = f"ERROR running docs QA checks:\n{result.stderr}\n"
+        return output
+    except Exception as e:
+        return f"ERROR running docs QA checks: {e}"
+
+
+CODE_PROJECT_TOOLS = [run_infra_qa_checks, run_pipeline_qa_checks, run_docs_qa_checks]
+
+
+# =============================================================================
+# Hackathon QA - Programmatic Checks
+# =============================================================================
+
+
+class RunHackathonQaChecksParams(BaseModel):
+    hackathon_dir: str = Field(description="Path to the hackathon directory to validate")
+    expected_challenges: int = Field(
+        default=0,
+        description="Expected number of challenges (0 to skip count check)",
+    )
+
+
+@define_tool(
+    description=(
+        "Run automated QA checks on a generated hackathon package. "
+        "Checks for: sequential challenge numbering, required sections per challenge "
+        "(Introduction, Description, Success Criteria, Learning Resources), "
+        "matching solution folders, coach materials, dev container validity, "
+        "top-level README structure, placeholder text, emoji, em-dashes, and "
+        "cross-reference consistency. Returns a structured report with "
+        "CRITICAL/MAJOR/MINOR issues. Exit code 0 = CLEAN, 1 = ISSUES_FOUND."
+    )
+)
+def run_hackathon_qa_checks(params: RunHackathonQaChecksParams) -> str:
+    import subprocess
+    qa_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "skills", "hackathon-generator", "hackathon_qa_checks.py")
+
+    if not os.path.exists(qa_script):
+        return f"ERROR: Hackathon QA script not found at {qa_script}"
+
+    cmd = [sys.executable, qa_script, params.hackathon_dir]
+    if params.expected_challenges and params.expected_challenges > 0:
+        cmd.extend(["--expected-challenges", str(params.expected_challenges)])
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout
+        if result.returncode == 2:
+            output = f"ERROR running hackathon QA checks:\n{result.stderr}\n"
+        return output
+    except Exception as e:
+        return f"ERROR running hackathon QA checks: {e}"
+
+
+HACKATHON_TOOLS = [run_hackathon_qa_checks]
+
+
+# =============================================================================
 # Exported tool groups
 # =============================================================================
 
-ALL_CUSTOM_TOOLS = RESEARCH_TOOLS + SLIDE_TOOLS + DEMO_TOOLS
+ALL_CUSTOM_TOOLS = (
+    RESEARCH_TOOLS + SLIDE_TOOLS + DEMO_TOOLS
+    + ARCHITECTURE_TOOLS + CODE_PROJECT_TOOLS + HACKATHON_TOOLS
+)
