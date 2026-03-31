@@ -15,9 +15,12 @@ and run automated quality review before delivering output.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import os
+import socket
+import sys
 import time
 from pathlib import Path
 
@@ -30,7 +33,7 @@ from copilot.types import (
     UserInputResponse,
 )
 
-from agents import AGENT_MODELS, AGENT_TIMEOUTS, ALL_AGENT_CONFIGS, ALL_SKILL_DIRS, DEFAULT_MODEL, DEFAULT_TIMEOUT
+from agents import AGENTS, ALL_AGENT_CONFIGS, ALL_SKILL_DIRS, DEFAULT_MODEL, DEFAULT_TIMEOUT
 from collector import EventCollector
 from router import init_router, route_to_agent
 from store import EventStore
@@ -240,14 +243,13 @@ async def main() -> None:
                 await session.rpc.agent.select(
                     SessionAgentSelectParams(name=agent_hint)
                 )
-                model = AGENT_MODELS.get(agent_hint, DEFAULT_MODEL)
                 await session.rpc.model.switch_to(
-                    SessionModelSwitchToParams(model_id=model)
+                    SessionModelSwitchToParams(model_id=DEFAULT_MODEL)
                 )
                 ui.current_agent = agent_hint
-                ui.current_model = model
+                ui.current_model = DEFAULT_MODEL
                 event_store.update_session_agent(session.session_id, agent_hint)
-                event_store.update_session_model(session.session_id, model)
+                event_store.update_session_model(session.session_id, DEFAULT_MODEL)
             except Exception as exc:
                 ui.print_error(f"Could not pre-select agent '{agent_hint}': {exc}")
 
@@ -309,15 +311,14 @@ async def main() -> None:
                         await session.rpc.agent.select(
                             SessionAgentSelectParams(name=arg)
                         )
-                        model = AGENT_MODELS.get(arg, DEFAULT_MODEL)
                         await session.rpc.model.switch_to(
-                            SessionModelSwitchToParams(model_id=model)
+                            SessionModelSwitchToParams(model_id=DEFAULT_MODEL)
                         )
                         ui.current_agent = arg
-                        ui.current_model = model
+                        ui.current_model = DEFAULT_MODEL
                         event_store.update_session_agent(session.session_id, arg)
-                        event_store.update_session_model(session.session_id, model)
-                        ui.print_success(f"Switched to {arg} (model: {model})")
+                        event_store.update_session_model(session.session_id, DEFAULT_MODEL)
+                        ui.print_success(f"Switched to {arg} (model: {DEFAULT_MODEL})")
                     except Exception as exc:
                         ui.print_error(f"Failed to switch agent: {exc}")
                     continue
@@ -471,7 +472,7 @@ async def main() -> None:
                         else:
                             raw_agent = s_detail.get("agent", "") or ""
                             ui.current_model = s_detail.get("model", DEFAULT_MODEL)
-                        ui.current_agent = raw_agent if raw_agent in AGENT_MODELS else None
+                        ui.current_agent = raw_agent if raw_agent in AGENTS else None
                         ui.session_id = full_id
                         ui._last_input_tokens = 0
                         ui.print_success(
@@ -560,11 +561,10 @@ async def main() -> None:
                 )
                 continue
             if agent_name:
-                model = AGENT_MODELS.get(agent_name, DEFAULT_MODEL)
                 ui.current_agent = agent_name
-                ui.current_model = model
+                ui.current_model = DEFAULT_MODEL
                 event_store.update_session_agent(session.session_id, agent_name)
-                event_store.update_session_model(session.session_id, model)
+                event_store.update_session_model(session.session_id, DEFAULT_MODEL)
 
             # ── Strip @mention prefix ─────────────────────────────────────
             clean_prompt = user_input
@@ -587,9 +587,7 @@ async def main() -> None:
             ui.print_input_lock_state(True)
             ui.reset_deltas()
 
-            effective_timeout = AGENT_TIMEOUTS.get(
-                ui.current_agent or "", DEFAULT_TIMEOUT
-            )
+            effective_timeout = DEFAULT_TIMEOUT
 
             # ── Turn tracking ─────────────────────────────────────────────
             turn_id = collector.on_turn_start(
@@ -725,10 +723,87 @@ async def main() -> None:
 
 def main_entry() -> None:
     """Synchronous entry point (for pyproject.toml console_scripts)."""
+    parser = argparse.ArgumentParser(description="CSA Copilot")
+    parser.add_argument(
+        "--server",
+        action="store_true",
+        help="Start the FastAPI server for the Electron desktop app",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="Port for the server (0 = pick a free port)",
+    )
+    args = parser.parse_args()
+
+    if args.server:
+        try:
+            asyncio.run(_server_main(args.port))
+        except KeyboardInterrupt:
+            pass
+    else:
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            pass
+
+
+async def _server_main(port: int) -> None:
+    """Start the FastAPI + uvicorn server for the Electron desktop frontend."""
+    import uvicorn
+    from server import app as fastapi_app, configure as server_configure
+
+    # Pick a free port if port == 0
+    if port == 0:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    (OUTPUTS_DIR / "slides").mkdir(exist_ok=True)
+    (OUTPUTS_DIR / "demos").mkdir(exist_ok=True)
+    PLANS_DIR.mkdir(parents=True, exist_ok=True)
+
+    db_path = DB_DIR / "csa-copilot.db"
+    event_store = EventStore(db_path, retention_days=90)
+    collector = EventCollector(event_store)
+
+    # Build CopilotClient (same as terminal mode)
+    client_opts: dict = {}
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        client_opts["github_token"] = github_token
+
+    client = CopilotClient(client_opts or None)
+    await client.start()
+    await init_router(client)
+
+    server_configure(
+        event_store=event_store,
+        copilot_client=client,
+        collector=collector,
+        app_dir=APP_DIR,
+        outputs_dir=OUTPUTS_DIR,
+    )
+
+    # Announce port to the Electron main process reading our stdout
+    print(f"PORT:{port}", flush=True)
+
+    config = uvicorn.Config(
+        fastapi_app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+        await server.serve()
+    finally:
+        event_store.close()
+        with contextlib.suppress(Exception):
+            await client.stop()
 
 
 if __name__ == "__main__":

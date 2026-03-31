@@ -1,7 +1,7 @@
 """
 Agent definitions for CSA-Copilot.
 
-Loads agents from ``agent_defs/*.md`` files via the ``agents`` package
+Loads agents from ``agent_defs/*.agent.md`` files via the ``agents`` package
 and re-exports backward-compatible module-level constants so that
 ``app.py``, ``router.py``, and ``tools.py`` continue to work unchanged.
 """
@@ -56,12 +56,6 @@ ROUTABLE_AGENTS: dict[str, dict[str, Any]] = {
 ALL_AGENT_CONFIGS: list[dict[str, Any]] = [
     _build_sdk_config(a) for a in CATALOG.agent_configs_list
 ]
-AGENT_MODELS: dict[str, str] = {
-    name: CATALOG.get_model_for(name) for name in CATALOG.all_agents
-}
-AGENT_TIMEOUTS: dict[str, int] = {
-    name: CATALOG.get_timeout_for(name) for name in CATALOG.all_agents
-}
 ALL_SKILL_DIRS: list[str] = CATALOG.skill_dirs
 
 __all__ = [
@@ -69,8 +63,6 @@ __all__ = [
     "AgentConfig",
     "AgentSource",
     "AGENTS",
-    "AGENT_MODELS",
-    "AGENT_TIMEOUTS",
     "ALL_AGENT_CONFIGS",
     "ALL_SKILL_DIRS",
     "CATALOG",
