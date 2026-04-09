@@ -140,6 +140,8 @@ Every output goes through multiple quality layers before delivery. See [docs/QUA
 
 ### Quickstart (Docker)
 
+**Linux / macOS / Git Bash:**
+
 ```bash
 git clone https://github.com/olivomarco/vbd-copilot.git
 cd vbd-copilot
@@ -148,6 +150,17 @@ docker run -it --rm \
   -e GITHUB_TOKEN=$(gh auth token) \
   -v "$(pwd)/outputs:/app/outputs" \
   csa-copilot
+```
+
+**Windows (CMD):**
+
+```cmd
+git clone https://github.com/olivomarco/vbd-copilot.git
+cd vbd-copilot
+docker build -t csa-copilot .
+gh auth token
+:: Copy the token from the output above
+docker run -it --rm -e GITHUB_TOKEN=YOUR_TOKEN_HERE -v "%cd%/outputs:/app/outputs" csa-copilot
 ```
 
 Other installation options (Copilot plugin, Codespaces, native): [docs/INSTALLATION.md](docs/INSTALLATION.md)
